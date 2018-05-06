@@ -9,17 +9,17 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import tensorflow.contrib.slim.nets as nets
 
-from src.ops import _conv_layer
-from src.ops import _residual_block
-from src.ops import _conv_tranpose_layer
-from src.ops import lrelu
-from src.ops import batch_norm
-from src.ops import linear
-from src.ops import conv2d
-from src.utils import load_data
-from src.utils import save_obj
-from src.utils import shuffle_augment_and_load
-from src.GTSRB_Classifier import GTSRB_Classifier
+from ops import _conv_layer
+from ops import _residual_block
+from ops import _conv_tranpose_layer
+from ops import lrelu
+from ops import batch_norm
+from ops import linear
+from ops import conv2d
+from utils import load_data
+from utils import save_obj
+from utils import randomly_overlay
+from GTSRB_Classifier import GTSRB_Classifier
 
 import os
 import time
@@ -117,31 +117,11 @@ class AdvPGAN(object):
 
     # pad the adversarial patch on image
     def pad_patch_on_image(self, image, patch):
-		# 用patch_mask来对image的相应位置进行覆盖
-		patch_mask = np.ones([patch.shape[0],patch.shape[0],3], dtype=np.float32)
-		patch_mask = tf.convert_to_tensor(patch_mask)	
-		patch_size = int(patch.shape[0])*1.5
-		patch = tf.image.resize_image_with_crop_or_pad(patch, int(patch_size), int(patch_size))
-		patch_mask = tf.image.resize_image_with_crop_or_pad(patch_mask, int(patch_size), int(patch_size))
-
-		# 同时对patch和patch_mask旋转随机角度
-		angle = np.random.uniform(low=-180.0, high=180.0)
-		def random_rotate_image_func(image, angle):
-			return misc.imrotate(image, angle, 'bicubic') 
-		patch_rotate = tf.py_func(random_rotate_image_func, [patch, angle], tf.uint8)
-		patch_mask = tf.py_func(random_rotate_image_func, [patch_mask, angle], tf.uint8)
-		patch_rotate = tf.image.convert_image_dtype(patch_rotate, tf.float32)
-		patch_mask = tf.image.convert_image_dtype(patch_mask, tf.float32)
-
-		# 同时对patch和patch_mask平移到随机位置
-		location_x = int(np.random.uniform(low=0, high=int(image.shape[0])-patch_size))
-		location_y = int(np.random.uniform(low=0, high=int(image.shape[0])-patch_size))
-		patch_rotate = tf.image.pad_to_bounding_box(patch_rotate, location_y, location_x, int(image.shape[0]), int(image.shape[0]))
-		patch_mask = tf.image.pad_to_bounding_box(patch_mask, location_y, location_x, int(image.shape[0]), int(image.shape[0]))
-		
-		# 把patch覆盖到image上
-		image_with_patch = (1-patch_mask)*image + patch_rotate
-		return image_with_patch
+        patched_image = []
+        for i in range(self.batch_size):
+            temp = randomly_overlay(image[i], patch[i])
+            patched_image.append(temp)
+        return patched_image
 
     # naive discriminator in GAN
     # using for adversarial training
